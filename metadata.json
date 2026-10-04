@@ -1,0 +1,6 @@
+{
+  "name": "FleetCraft 3D - Commercial Bus Management & Ticketing",
+  "description": "Commercial bus operations platform with immersive 3D interior Street View inspection, manual passenger ticketing, and fleet management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
