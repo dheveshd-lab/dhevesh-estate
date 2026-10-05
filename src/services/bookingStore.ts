@@ -224,6 +224,33 @@ class BookingStoreService {
     return { total, available, booked, blocked };
   }
 
+  public getGlobalFleetMetrics() {
+    const totalBuses = FLEET_BUSES.length;
+    const activeTrips = FLEET_BUSES.length;
+
+    const confirmedBookings = this.bookings.filter((b) => b.status === 'Confirmed');
+    const paidBookings = confirmedBookings.filter((b) => b.paymentStatus === 'Paid');
+    const revenue = paidBookings.reduce((sum, b) => sum + (b.fare || 0), 0);
+
+    const pendingBookings = confirmedBookings.filter((b) => b.paymentStatus === 'Pending');
+    const pendingAmount = pendingBookings.reduce((sum, b) => sum + (b.fare || 0), 0);
+
+    const totalSeats = FLEET_BUSES.reduce((sum, b) => sum + b.seats.length, 0);
+    const totalBookedSeats = confirmedBookings.length;
+
+    return {
+      totalBuses,
+      activeTrips,
+      revenue,
+      paidCount: paidBookings.length,
+      pendingAmount,
+      pendingCount: pendingBookings.length,
+      totalBookingsCount: confirmedBookings.length,
+      totalSeats,
+      totalBookedSeats,
+    };
+  }
+
   // STRICT MANUAL BOOKING: Only executed upon operator's explicit confirmation!
   public confirmManualBooking(data: {
     busId: string;
@@ -346,6 +373,7 @@ export function useBookingStore() {
     getBookingsForActiveBus: () => bookingStore.getBookingsForActiveBus(),
     getAllBookings: () => bookingStore.getAllBookings(),
     getMetrics: (busId: string) => bookingStore.getMetrics(busId),
+    getGlobalFleetMetrics: () => bookingStore.getGlobalFleetMetrics(),
     confirmManualBooking: (data: any) => bookingStore.confirmManualBooking(data),
     updateBooking: (id: string, updates: any) => bookingStore.updateBooking(id, updates),
     cancelBooking: (id: string) => bookingStore.cancelBooking(id),

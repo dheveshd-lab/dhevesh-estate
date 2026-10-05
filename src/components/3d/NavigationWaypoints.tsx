@@ -1,19 +1,20 @@
 import React, { useState, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
 import { NavigationWaypoint } from '../../types/bus';
 
 interface NavigationWaypointsProps {
   waypoints: NavigationWaypoint[];
   currentWaypointId: string;
   onSelectWaypoint: (wp: NavigationWaypoint) => void;
+  onHoverWaypoint?: (wp: NavigationWaypoint | null) => void;
 }
 
 export const NavigationWaypoints: React.FC<NavigationWaypointsProps> = ({
   waypoints,
   currentWaypointId,
   onSelectWaypoint,
+  onHoverWaypoint,
 }) => {
   return (
     <group>
@@ -23,6 +24,7 @@ export const NavigationWaypoints: React.FC<NavigationWaypointsProps> = ({
           waypoint={wp}
           isCurrent={wp.id === currentWaypointId}
           onSelect={() => onSelectWaypoint(wp)}
+          onHover={onHoverWaypoint}
         />
       ))}
     </group>
@@ -33,9 +35,15 @@ interface WaypointNodeProps {
   waypoint: NavigationWaypoint;
   isCurrent: boolean;
   onSelect: () => void;
+  onHover?: (wp: NavigationWaypoint | null) => void;
 }
 
-const WaypointNode: React.FC<WaypointNodeProps> = ({ waypoint, isCurrent, onSelect }) => {
+const WaypointNode: React.FC<WaypointNodeProps> = ({
+  waypoint,
+  isCurrent,
+  onSelect,
+  onHover,
+}) => {
   const [hovered, setHovered] = useState(false);
   const ringRef = useRef<THREE.Mesh>(null);
   const pulseRef = useRef<THREE.Mesh>(null);
@@ -81,11 +89,13 @@ const WaypointNode: React.FC<WaypointNodeProps> = ({ waypoint, isCurrent, onSele
         onPointerOver={(e) => {
           e.stopPropagation();
           setHovered(true);
+          if (onHover) onHover(waypoint);
           document.body.style.cursor = 'pointer';
         }}
         onPointerOut={(e) => {
           e.stopPropagation();
           setHovered(false);
+          if (onHover) onHover(null);
           document.body.style.cursor = 'default';
         }}
       >
@@ -114,27 +124,6 @@ const WaypointNode: React.FC<WaypointNodeProps> = ({ waypoint, isCurrent, onSele
         <coneGeometry args={[0.06, 0.1, 3]} />
         <meshBasicMaterial color="#ffffff" />
       </mesh>
-
-      {/* Street View Node Tag */}
-      {(hovered || isCurrent) && (
-        <Html position={[0, 0.25, 0]} center distanceFactor={8}>
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect();
-            }}
-            className={`pointer-events-auto cursor-pointer transition-all duration-200 px-2.5 py-1 rounded-full text-xs font-medium shadow-xl border flex items-center gap-1.5 whitespace-nowrap ${
-              isCurrent
-                ? 'bg-sky-950/90 text-sky-200 border-sky-400/50 backdrop-blur-md'
-                : 'bg-neutral-900/90 text-neutral-200 border-neutral-700/80 backdrop-blur-md hover:bg-neutral-800'
-            }`}
-          >
-            <div className={`w-2 h-2 rounded-full ${isCurrent ? 'bg-sky-400' : 'bg-blue-500'}`} />
-            <span>{waypoint.label}</span>
-            {!isCurrent && <span className="text-[10px] text-neutral-400">· Walk here</span>}
-          </div>
-        </Html>
-      )}
     </group>
   );
 };

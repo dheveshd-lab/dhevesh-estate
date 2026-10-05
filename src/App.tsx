@@ -9,6 +9,10 @@ import { SeatInspectorModal } from './components/ui/SeatInspectorModal';
 import { BookingConfirmationDialog } from './components/ui/BookingConfirmationDialog';
 import { BookingTicketModal } from './components/ui/BookingTicketModal';
 import { OperatorDrawer } from './components/ui/OperatorDrawer';
+import { Dashboard } from './components/dashboard/Dashboard';
+import { FleetMap } from './components/map/FleetMap';
+import { AIOperationsAgent } from './components/ai/AIOperationsAgent';
+import { Sparkles } from 'lucide-react';
 
 export default function App() {
   const {
@@ -22,7 +26,9 @@ export default function App() {
     getSeatState,
     getBookingForSeat,
     getBookingsForActiveBus,
+    getAllBookings,
     getMetrics,
+    getGlobalFleetMetrics,
     confirmManualBooking,
     updateBooking,
     cancelBooking,
@@ -30,9 +36,13 @@ export default function App() {
     resetAllToSeed,
   } = useBookingStore();
 
+  // Primary view state: 'dashboard' | 'interior' | 'map'
+  const [currentView, setCurrentView] = useState<'dashboard' | 'interior' | 'map'>('dashboard');
+
   // UI state
   const [showMiniMap, setShowMiniMap] = useState(true);
   const [isOperatorDrawerOpen, setIsOperatorDrawerOpen] = useState(false);
+  const [isAIAgentOpen, setIsAIAgentOpen] = useState(false);
   const [viewingTicketBooking, setViewingTicketBooking] = useState<Booking | null>(null);
 
   // Pending Manual Booking Confirmation state
@@ -49,13 +59,42 @@ export default function App() {
     notes?: string;
   } | null>(null);
 
-  // Active metrics directly derived from real data
-  const metrics = getMetrics(activeBusId);
+  // Metrics directly derived from real data
+  const busMetrics = getMetrics(activeBusId);
+  const globalMetrics = getGlobalFleetMetrics();
+  const allBookings = getAllBookings();
 
   // Currently inspected seat object
   const currentSeat = activeBus.seats.find((s) => s.id === selectedSeatId) || null;
   const currentBooking = selectedSeatId ? getBookingForSeat(activeBusId, selectedSeatId) : undefined;
   const currentSeatState = selectedSeatId ? getSeatState(activeBusId, selectedSeatId) : 'AVAILABLE';
+
+  // Transition operator directly into 3D interior (optionally targeting a specific seat)
+  const handleEnter3DInterior = (busId?: string, seatId?: string) => {
+    if (busId && busId !== activeBusId) {
+      setActiveBusId(busId);
+      setSelectedSeatId(null);
+    }
+    setCurrentView('interior');
+
+    if (seatId) {
+      setTimeout(() => {
+        const busObj = activeBus;
+        const targetSeat = busObj.seats.find((s) => s.id === seatId || s.label === seatId);
+        if (targetSeat) {
+          handleSelectSeat(targetSeat);
+        }
+      }, 100);
+    }
+  };
+
+  // Transition to Fleet Map
+  const handleOpenFleetMap = (busId?: string) => {
+    if (busId && busId !== activeBusId) {
+      setActiveBusId(busId);
+    }
+    setCurrentView('map');
+  };
 
   // Handle seat selection from 3D scene or 2D matrix
   const handleSelectSeat = (seat: SeatConfig) => {
@@ -72,6 +111,7 @@ export default function App() {
 
   // Handle locating a seat from bookings list or manifest
   const handleLocateSeat = (seat: SeatConfig) => {
+    setCurrentView('interior');
     handleSelectSeat(seat);
   };
 
@@ -121,72 +161,120 @@ export default function App() {
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-neutral-950 font-sans select-none">
-      {/* 1. PRIMARY EXPERIENCE: 3D Bus Interior Viewport */}
-      <div className="absolute inset-0 z-0">
-        <BusScene
-          bus={activeBus}
-          selectedSeatId={selectedSeatId}
-          getSeatState={getSeatState}
-          onSelectSeat={handleSelectSeat}
-          externalCameraFocus={cameraFocusTarget}
-          onClearExternalFocus={() => setCameraFocusTarget(null)}
-        />
-      </div>
-
-      {/* 2. TOP INFORMATION BAR (Commercial bus specifications, route & dynamic counters) */}
+      {/* 1. TOP INFORMATION BAR (Persistent across Dashboard, 3D Interior, and Fleet Map) */}
       <TopInfoBar
+        currentView={currentView}
+        onChangeView={setCurrentView}
         activeBus={activeBus}
         onSelectBus={(busId) => {
           setActiveBusId(busId);
           setSelectedSeatId(null);
         }}
-        metrics={metrics}
+        metrics={busMetrics}
         onOpenOperatorPanel={() => setIsOperatorDrawerOpen(true)}
+        onOpenAIAgent={() => setIsAIAgentOpen(true)}
         onResetSeed={resetAllToSeed}
       />
 
-      {/* 3. STREET VIEW NAVIGATION HUD (Aisle waypoints & interaction compass) */}
-      <StreetViewHUD
-        waypoints={activeBus.waypoints}
-        currentWaypointId={activeBus.waypoints[0]?.id || ''}
-        onSelectWaypoint={(wp) => {
-          setCameraFocusTarget({
-            position: wp.position,
-            lookAt: wp.targetLookAt,
-          });
-        }}
-        showMiniMap={showMiniMap}
-        onToggleMiniMap={() => setShowMiniMap(!showMiniMap)}
+      {/* 2. PRIMARY VIEW RENDERING */}
+      {currentView === 'dashboard' ? (
+        <Dashboard
+          onEnter3DInterior={handleEnter3DInterior}
+          onOpenFleetMap={handleOpenFleetMap}
+          onOpenOperatorPanel={(tab) => setIsOperatorDrawerOpen(true)}
+          onOpenAIAgent={() => setIsAIAgentOpen(true)}
+          onViewTicket={(b) => setViewingTicketBooking(b)}
+          allBookings={allBookings}
+          getMetrics={getMetrics}
+          globalMetrics={globalMetrics}
+        />
+      ) : currentView === 'map' ? (
+        <FleetMap
+          onEnter3DInterior={handleEnter3DInterior}
+          onOpenOperatorPanel={(tab) => setIsOperatorDrawerOpen(true)}
+          selectedBusId={activeBusId}
+          onSelectBus={(busId) => setActiveBusId(busId)}
+        />
+      ) : (
+        <div className="absolute inset-0 z-0">
+          {/* 3D Bus Interior Viewport */}
+          <BusScene
+            bus={activeBus}
+            selectedSeatId={selectedSeatId}
+            getSeatState={getSeatState}
+            onSelectSeat={handleSelectSeat}
+            externalCameraFocus={cameraFocusTarget}
+            onClearExternalFocus={() => setCameraFocusTarget(null)}
+          />
+
+          {/* Street View Navigation HUD (Aisle waypoints & interaction compass) */}
+          <StreetViewHUD
+            waypoints={activeBus.waypoints}
+            currentWaypointId={activeBus.waypoints[0]?.id || ''}
+            onSelectWaypoint={(wp) => {
+              setCameraFocusTarget({
+                position: wp.position,
+                lookAt: wp.targetLookAt,
+              });
+            }}
+            showMiniMap={showMiniMap}
+            onToggleMiniMap={() => setShowMiniMap(!showMiniMap)}
+          />
+
+          {/* Optional 2D Cabin Seat Map */}
+          {showMiniMap && (
+            <MiniSeatMap
+              bus={activeBus}
+              selectedSeatId={selectedSeatId}
+              getSeatState={getSeatState}
+              onSelectSeat={handleSelectSeat}
+              onClose={() => setShowMiniMap(false)}
+            />
+          )}
+
+          {/* Seat Inspector & Manual Ticketing Panel */}
+          {currentSeat && (
+            <SeatInspectorModal
+              seat={currentSeat}
+              state={currentSeatState}
+              booking={currentBooking}
+              bus={activeBus}
+              onClose={() => setSelectedSeatId(null)}
+              onInitiateBookingReview={handleInitiateBookingReview}
+              onCancelBooking={(bookingId) => cancelBooking(bookingId)}
+              onToggleBlock={(busId, seatId) => toggleSeatBlock(busId, seatId)}
+              onViewTicket={(b) => setViewingTicketBooking(b)}
+              onUpdateBooking={(bId, updates) => updateBooking(bId, updates)}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Floating AI Operations Launcher in bottom corner */}
+      {!isAIAgentOpen && (
+        <button
+          onClick={() => setIsAIAgentOpen(true)}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-sky-400 via-teal-300 to-sky-300 hover:from-sky-300 hover:to-teal-200 text-sky-950 font-bold text-xs rounded-full shadow-2xl transition-all duration-150 cursor-pointer border border-sky-200/50 hover:scale-105 active:scale-95"
+          title="Open AI Operations Agent"
+        >
+          <Sparkles className="w-4 h-4 text-sky-950" />
+          <span>✦ AI OPERATIONS</span>
+        </button>
+      )}
+
+      {/* 3. AI OPERATIONS AGENT PANEL */}
+      <AIOperationsAgent
+        isOpen={isAIAgentOpen}
+        onClose={() => setIsAIAgentOpen(false)}
+        onEnter3DInterior={handleEnter3DInterior}
+        onOpenFleetMap={handleOpenFleetMap}
+        onOpenOperatorPanel={(tab) => setIsOperatorDrawerOpen(true)}
+        onCancelBooking={(id) => cancelBooking(id)}
+        allBookings={allBookings}
+        metrics={globalMetrics}
       />
 
-      {/* 4. OPTIONAL 2D SEAT MAP (Secondary orientation widget) */}
-      {showMiniMap && (
-        <MiniSeatMap
-          bus={activeBus}
-          selectedSeatId={selectedSeatId}
-          getSeatState={getSeatState}
-          onSelectSeat={handleSelectSeat}
-          onClose={() => setShowMiniMap(false)}
-        />
-      )}
-
-      {/* 5. SEAT INSPECTOR & MANUAL BOOKING PANEL */}
-      {currentSeat && (
-        <SeatInspectorModal
-          seat={currentSeat}
-          state={currentSeatState}
-          booking={currentBooking}
-          bus={activeBus}
-          onClose={() => setSelectedSeatId(null)}
-          onInitiateBookingReview={handleInitiateBookingReview}
-          onCancelBooking={(bookingId) => cancelBooking(bookingId)}
-          onToggleBlock={(busId, seatId) => toggleSeatBlock(busId, seatId)}
-          onViewTicket={(b) => setViewingTicketBooking(b)}
-          onUpdateBooking={(bId, updates) => updateBooking(bId, updates)}
-        />
-      )}
-
-      {/* 6. BOOKING CONFIRMATION DIALOG (Final manual confirmation required) */}
+      {/* 4. BOOKING CONFIRMATION DIALOG (Global manual confirmation modal) */}
       {pendingConfirmation && (
         <BookingConfirmationDialog
           isOpen={!!pendingConfirmation}
@@ -207,7 +295,7 @@ export default function App() {
         />
       )}
 
-      {/* 7. OFFICIAL E-TICKET & BOARDING PASS MODAL */}
+      {/* 5. OFFICIAL E-TICKET & BOARDING PASS MODAL */}
       {viewingTicketBooking && (
         <BookingTicketModal
           booking={viewingTicketBooking}
@@ -216,7 +304,7 @@ export default function App() {
         />
       )}
 
-      {/* 8. OPERATOR MANAGEMENT DRAWER (Bookings List, Passenger Manifest, Fleet) */}
+      {/* 6. OPERATOR MANAGEMENT DRAWER (Bookings List, Passenger Manifest, Fleet) */}
       <OperatorDrawer
         isOpen={isOperatorDrawerOpen}
         onClose={() => setIsOperatorDrawerOpen(false)}
@@ -226,7 +314,7 @@ export default function App() {
           setSelectedSeatId(null);
         }}
         bookings={getBookingsForActiveBus()}
-        metrics={metrics}
+        metrics={busMetrics}
         onLocateSeat={handleLocateSeat}
         onViewTicket={(b) => setViewingTicketBooking(b)}
         onCancelBooking={(bookingId) => cancelBooking(bookingId)}

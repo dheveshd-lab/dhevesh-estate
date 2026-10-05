@@ -47,6 +47,26 @@ export interface NavigationWaypoint {
   shortDesc: string;
 }
 
+export interface BusTelemetry {
+  busId: string;
+  code: string;
+  status: 'In Transit' | 'Stopped' | 'Depot' | 'Maintenance';
+  locationName: string;
+  coordinates: { lat: number; lng: number };
+  speedKmh: number;
+  lastUpdated: string;
+  driver: {
+    name: string;
+    phone: string;
+    license: string;
+  };
+  delayMinutes: number;
+  estimatedArrival: string;
+  nextStop: string;
+  routeProgressPercent: number;
+  liveGpsConnected: boolean;
+}
+
 export interface BusModel {
   id: string;
   code: string; // "BUS-101"
